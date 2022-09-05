@@ -1,0 +1,104 @@
+/*
+ * Copyright 2019-2020 by Security and Safety Things GmbH
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Project-level build.gradle file where you can add configuration options common to all sub-projects/modules.
+
+buildscript {
+    ext {
+        APP_NAME = 'HelloWorld'
+    }
+    repositories {
+        /**
+         * Needed for gradle and android dependencies
+         */
+        google()
+        maven {
+            url "https://plugins.gradle.org/m2/"
+        }
+    }
+    dependencies {
+        /**
+         * Android gradle plugin corresponding to wrapper 5.6.4, and required for
+         * Security and Safety Things GmbH:Security and Safety Things APIs v6:27+
+         */
+        classpath('com.android.tools.build:gradle') {
+            version {
+                /*
+                 * This will enforce the Android gradle plugin to always resolve to version 3.4.1.
+                 * Without this, other plugins can cause this plugin to resolve to another version, potentially causing build problems.
+                 */
+                strictly '3.4.1'
+            }
+        }
+        /**
+         * Plugin for generating a license report for this project
+         */
+        classpath 'com.jaredsburrows:gradle-license-plugin:0.8.6'
+        /**
+         * Checks the project and its dependencies for vulnerabilities
+         */
+        classpath 'org.owasp:dependency-check-gradle:6.5.2.1'
+        // NOTE: Do not place your application dependencies here; they belong in the individual module-level build.gradle files.
+    }
+}
+allprojects {
+    repositories {
+        /**
+         * Needed for android dependencies
+         */
+        google()
+        /**
+         * Needed for TensorFlow, Javax, EventBus, etc.
+         */
+        mavenCentral()
+        maven {
+            url 'https://artifacts.azena.com/repository/maven'
+            credentials {
+                // The credentials for Azena's maven repository must be defined in a file called gradle.properties.
+                // On Linux, create this file under ~/.gradle/gradle.properties
+                // On Windows, create this file under %USERPROFILE%/.gradle/gradle.properties
+
+                // Set 'sstUsername' in gradle.properties as "sstUsername=<your username for https://docs.azena.com/>"
+                username sstUsername
+                // Set 'sstPassword' in gradle.properties as "sstPassword=<your password for https://docs.azena.com/>"
+                password sstPassword
+            }
+        }
+    }
+}
+/**
+ * Deletes the generated build directory from the project
+ */
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
+
+apply plugin: 'org.owasp.dependencycheck'
+dependencyCheck {
+    // No extra dependency folders to scan.
+    scanSet = []
+    // Only scan vulnerabilities in the app project.
+    scanProjects = [':app']
+    /*
+     * Only consider the dependencies that are used in the app's compilation and runtime.
+     * These configurations (and their dependency trees) can be viewed by running './gradlew app:dependencies'.
+     */
+    scanConfigurations = ['debugCompileClasspath', 'debugRuntimeClasspath', 'releaseCompileClasspath', 'releaseRuntimeClasspath']
+    // Path to the file used for suppressing found vulnerabilities.
+    suppressionFile = "$project.rootDir/cve/suppressions.xml"
+    // The vulnerability report formats to output in.
+    formats = ['HTML', 'JSON']
+}

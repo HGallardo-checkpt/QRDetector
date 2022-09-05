@@ -1,0 +1,36 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Note: ESLint and Prettier will ignore these files if "--ignore-path ./.gitignore" is used (as can be seen in the package.json "lint" script).
+
+# Dependencies
+/node_modules
+
+# Build files
+/build
+/build_tools
+
+# Local env files
+.env
+.env.local
+.env.*.local
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor directories and files
+*.iml
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw*
+
+# IDE generated files
+.project
+.settings
+
+# Misc
+.DS_Store

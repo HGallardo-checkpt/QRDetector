@@ -1,0 +1,25 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.securityandsafetythings.examples.helloworld">
+    <uses-permission android:name="com.securityandsafetythings.permission.WEBSERVER" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="com.securityandsafetythings.permission.VIDEO" />
+    <application
+            android:name=".TfLiteDetectorApplication"
+        android:allowBackup="true"
+        android:label="${applicationLabel}"
+        android:icon="@mipmap/ic_launcher"
+        tools:ignore="GoogleAppIndexingWarning">
+        <uses-library
+            android:name="com.securityandsafetythings.apis.v6"
+            android:required="false" />
+        <service
+            android:name=".services.MainService"
+            android:permission="com.securityandsafetythings.permission.START_SOLUTION">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="com.securityandsafetythings.intent.category.SOLUTION" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>
