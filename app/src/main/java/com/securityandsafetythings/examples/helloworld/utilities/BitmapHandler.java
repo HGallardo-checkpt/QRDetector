@@ -22,8 +22,12 @@ import android.graphics.Matrix;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import com.securityandsafetythings.examples.helloworld.events.OnDetectionProcessEvent;
+import com.securityandsafetythings.examples.helloworld.events.OnInferenceCompletedEvent;
 import com.securityandsafetythings.examples.helloworld.rest.HelloWorldEndpoint;
+import com.securityandsafetythings.examples.helloworld.rest.QRDetectionEndPoint;
 import com.securityandsafetythings.examples.helloworld.storage.StorageBitmapLocally;
+import com.securityandsafetythings.jumpsuite.commonhelpers.BitmapUtils;
 
 /**
  * Class responsible for handling the messages sent to the BitmapHandlerThread.
@@ -61,8 +65,10 @@ public class BitmapHandler extends Handler {
         case SET_BITMAP:
 
             Bitmap currentBitmap = (Bitmap)msg.obj;
-            HelloWorldEndpoint.getInstance().setImage(RotateBitmap(currentBitmap,180));
-             break;
+            QRDetectionEndPoint.getInstance().setImage(currentBitmap);
+            new OnDetectionProcessEvent(currentBitmap).broadcastEvent();
+
+            break;
         default:
             Log.e(LOGTAG, "Unknown message received on BitmapHandlerThread");
         }

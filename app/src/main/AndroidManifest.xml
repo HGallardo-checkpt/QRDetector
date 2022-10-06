@@ -3,6 +3,8 @@
     package="com.securityandsafetythings.examples.helloworld">
     <uses-permission android:name="com.securityandsafetythings.permission.WEBSERVER" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <uses-permission android:name="com.securityandsafetythings.permission.VIDEO" />
     <application
             android:name=".TfLiteDetectorApplication"

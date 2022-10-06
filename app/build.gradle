@@ -37,7 +37,7 @@ android {
          * 27 is the minimum AOSP API version supported by the Azena SDK.
          */
         minSdkVersion 27
-        targetSdkVersion 29
+        targetSdkVersion 32
         def majorVersion = 8
         def minorVersion = 0
         def patchNumber = 0
@@ -110,9 +110,13 @@ dependencies {
 
     implementation 'com.quickbirdstudios:opencv:4.5.3.0'
 
-    implementation 'org.greenrobot:eventbus:3.1.1'
+    implementation 'org.greenrobot:eventbus:3.3.1'
 
     implementation 'com.google.mlkit:barcode-scanning:17.0.2'
+
+    implementation 'com.squareup.retrofit2:retrofit:2.8.1'
+    implementation 'com.google.code.gson:gson:2.8.6'
+    implementation 'com.squareup.retrofit2:converter-gson:2.8.1'
 
 }
 

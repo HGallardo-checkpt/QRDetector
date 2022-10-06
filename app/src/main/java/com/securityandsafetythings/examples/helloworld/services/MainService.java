@@ -1,5 +1,6 @@
 package com.securityandsafetythings.examples.helloworld.services;
 
+import android.annotation.SuppressLint;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.Image;
@@ -7,13 +8,20 @@ import android.media.ImageReader;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
-import android.os.Process;
 import android.util.Log;
+import android.util.Pair;
+import com.google.mlkit.vision.barcode.common.Barcode;
 import com.securityandsafetythings.Build;
 import com.securityandsafetythings.app.VideoService;
 import com.securityandsafetythings.examples.helloworld.BuildConfig;
+import com.securityandsafetythings.examples.helloworld.api.APIClient;
+import com.securityandsafetythings.examples.helloworld.api.APIInterface;
+import com.securityandsafetythings.examples.helloworld.events.OnDetectionProcessEvent;
+import com.securityandsafetythings.examples.helloworld.events.OnPostProccessingCompletedEvent;
 import com.securityandsafetythings.examples.helloworld.inference.handlers.InferenceHandler;
 import com.securityandsafetythings.examples.helloworld.events.OnInferenceCompletedEvent;
+import com.securityandsafetythings.examples.helloworld.pojos.DetectionResult;
+import com.securityandsafetythings.examples.helloworld.render.RenderHandler;
 import com.securityandsafetythings.examples.helloworld.rest.QRDetectionEndPoint;
 import com.securityandsafetythings.examples.helloworld.utilities.BitmapHandler;
 import com.securityandsafetythings.jumpsuite.commonhelpers.BitmapUtils;
@@ -25,10 +33,18 @@ import com.securityandsafetythings.video.VideoSession;
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
+
+import java.util.List;
+
 public class MainService extends VideoService {
 
     private static final String INFERENCE_THREAD_NAME = String.format("%s%s",
             MainService.class.getSimpleName(), "InferenceThread");
+    private static final String RENDER_THREAD_NAME = String.format("%s%s",
+            MainService.class.getSimpleName(), "InferenceThread");
+
+    private static final String BITMAP_THREAD_NAME = String.format("%s%s",
+            BitmapHandler.class.getSimpleName(), "BitmapThread");
     private static final String LOGTAG = MainService.class.getSimpleName();
     /*
      * When the VideoSession is restarted due to base camera configuration changes,
@@ -39,10 +55,11 @@ public class MainService extends VideoService {
      * Lock object for making sure that the {@link BitmapHandler} isn't used to send messages while the thread is being stopped.
      *
      * @see #onImageAvailable(ImageReader)
-     * @see #stopBitmapHandlerThread()
      */
-    private static final Object BITMAP_HANDLER_LOCK = new Object();
     private static final Object INFERENCE_HANDLER_LOCK =new Object();
+    private static final Object BITMAP_HANDLER_LOCK = new Object();
+    private static final Object RENDER_HANDLER_LOCK =new Object();
+
     private VideoManager mVideoManager;
     private WebServerConnection mWebServerConnection;
     private Handler mBitmapHandler;
@@ -50,8 +67,12 @@ public class MainService extends VideoService {
 
     private InferenceHandler mInferenceHandler;
     private HandlerThread mInferenceHandlerThread;
+
+    private Handler mRenderHandler;
+    private HandlerThread mRenderHandlerThread;
     private VideoCapture mCapture;
 
+    private APIInterface apiInterface;
 
     /**
      * Called when the service is created.
@@ -81,28 +102,44 @@ public class MainService extends VideoService {
      */
     @Override
     protected void onVideoAvailable(final VideoManager manager) {
-        // Store the VideoManager for subscribing to video streams from the VideoPipeline.
         mVideoManager = manager;
         mCapture = mVideoManager.getDefaultVideoCapture();
+        startBitmapHandlerThread();
         startInferenceThread();
         configureDetector();
         startVideoSession();
     }
 
-    @Subscribe(threadMode = ThreadMode.MAIN_ORDERED)
-    public void onEvent(final OnInferenceCompletedEvent onInferenceCompletedEvent) {
+    @Subscribe(threadMode = ThreadMode.ASYNC)
+    public void onEvent(final OnPostProccessingCompletedEvent onPostProccessingCompletedEvent) {
 
-        Bitmap bitmap = BitmapFactory.decodeByteArray(onInferenceCompletedEvent.getImageAsBytes(),
-                0, onInferenceCompletedEvent.getImageAsBytes().length);
-        QRDetectionEndPoint.getInstance().setImage(bitmap);
+        Log.e("---->","starting render process");
+        Pair<Bitmap, List<Barcode>> detectionResult = onPostProccessingCompletedEvent.getResult();
+        Log.e("---->",""+detectionResult.second.get(0).getRawValue());
+        apiInterface = APIClient.getClient().create(APIInterface.class);
+        apiInterface.createUser(detectionResult.second.get(0).getRawValue());
 
     }
-        private void configureDetector() {
+    @Subscribe(threadMode = ThreadMode.ASYNC)
+    public void onEvent(final OnDetectionProcessEvent onDetectionProcessEvent) {
+
+        Log.e("---->","starting render process");
+        Bitmap bitmap = onDetectionProcessEvent.getResult();
+        if (!mInferenceHandler.hasMessages(InferenceHandler.Message.RUN_INFERENCE.ordinal())) {
+            mInferenceHandler.obtainMessage(InferenceHandler.Message.RUN_INFERENCE.ordinal(),bitmap).sendToTarget();
+        }
+
+    }
+
+
+    private void configureDetector() {
         if (!mInferenceHandler.hasMessages(InferenceHandler.Message.CONFIGURE_DETECTOR.ordinal())) {
             mInferenceHandler.obtainMessage(InferenceHandler.Message.CONFIGURE_DETECTOR.ordinal()).sendToTarget();
         }
 
     }
+
+
 
     @Override
     protected void onImageAvailable(final ImageReader reader) {
@@ -113,8 +150,14 @@ public class MainService extends VideoService {
                 return;
             }
 
-            // Use the lock to prevent sending messages on a dead thread.
 
+            synchronized (BITMAP_HANDLER_LOCK) {
+                 if (mBitmapHandler != null && !mBitmapHandler.hasMessages(BitmapHandler.Message.SET_BITMAP.ordinal())) {
+                     mBitmapHandler.obtainMessage(BitmapHandler.Message.SET_BITMAP.ordinal(), BitmapUtils.imageToBitmap(image))
+                            .sendToTarget();
+                }
+            }
+/*
 
             synchronized (INFERENCE_HANDLER_LOCK) {
                 if (!mInferenceHandler.hasMessages(InferenceHandler.Message.RUN_INFERENCE.ordinal())) {
@@ -123,6 +166,7 @@ public class MainService extends VideoService {
                 }
 
             }
+*/
 
         }
     }
@@ -145,6 +189,7 @@ public class MainService extends VideoService {
         }
     }
 
+    @SuppressLint("MissingPermission")
     private void attachWebServer() {
         // Create the app's web server extension by building a WebServerConnection.
         mWebServerConnection = new WebServerConnection.Builder(
@@ -179,6 +224,7 @@ public class MainService extends VideoService {
     /**
      * Detaches the app's web server extension from the camera <i>WebServer</i>.
      */
+    @SuppressLint("MissingPermission")
     private void detachWebServer() {
         if (mWebServerConnection != null) {
             /*
@@ -211,14 +257,28 @@ public class MainService extends VideoService {
         Log.d(LOGTAG, "startVideoSession(): openVideo() is called and VideoSession is started");
     }
 
+    private void startRenderThread(){
+        mRenderHandlerThread = new HandlerThread(RENDER_THREAD_NAME);
+        mRenderHandlerThread.start();
+        mRenderHandler = new RenderHandler(mRenderHandlerThread.getLooper());
+
+    }
+
+    private void stopRenderThread(){
+        synchronized (RENDER_HANDLER_LOCK) {
+            mRenderHandlerThread = null;
+            if (mRenderHandlerThread != null) {
+                mRenderHandlerThread.quitSafely();
+                mRenderHandlerThread = null;
+            }
+        }
+    }
     private void startInferenceThread() {
         mInferenceHandlerThread = new HandlerThread(INFERENCE_THREAD_NAME);
         mInferenceHandlerThread.start();
         mInferenceHandler = new InferenceHandler(mInferenceHandlerThread.getLooper());
 
     }
-
-
     private void stopInferenceThread() {
         synchronized (INFERENCE_HANDLER_LOCK) {
             mInferenceHandler = null;
@@ -228,5 +288,22 @@ public class MainService extends VideoService {
             }
         }
     }
+    private void startBitmapHandlerThread() {
+        mBitmapHandlerThread = new HandlerThread(BITMAP_THREAD_NAME);
+        mBitmapHandlerThread.start();
+        mBitmapHandler = new BitmapHandler(mBitmapHandlerThread.getLooper());
+    }
+
+    private void stopBitmapHandlerThread() {
+        // Use the lock to prevent sending messages on a dead thread.
+        synchronized (BITMAP_HANDLER_LOCK) {
+            mBitmapHandler = null;
+            if (mBitmapHandlerThread != null) {
+                mBitmapHandlerThread.quitSafely();
+                mBitmapHandlerThread = null;
+            }
+        }
+    }
+
 
 }
