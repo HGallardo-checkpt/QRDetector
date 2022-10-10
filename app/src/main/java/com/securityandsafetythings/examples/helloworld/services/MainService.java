@@ -10,12 +10,15 @@ import android.os.HandlerThread;
 import android.os.Looper;
 import android.util.Log;
 import android.util.Pair;
+import androidx.annotation.RequiresApi;
 import com.google.mlkit.vision.barcode.common.Barcode;
 import com.securityandsafetythings.Build;
 import com.securityandsafetythings.app.VideoService;
 import com.securityandsafetythings.examples.helloworld.BuildConfig;
 import com.securityandsafetythings.examples.helloworld.api.APIClient;
 import com.securityandsafetythings.examples.helloworld.api.APIInterface;
+import com.securityandsafetythings.examples.helloworld.direction.DirectionDetection;
+import com.securityandsafetythings.examples.helloworld.direction.DirectionDetectorHandler;
 import com.securityandsafetythings.examples.helloworld.events.OnDetectionProcessEvent;
 import com.securityandsafetythings.examples.helloworld.events.OnPostProccessingCompletedEvent;
 import com.securityandsafetythings.examples.helloworld.inference.handlers.InferenceHandler;
@@ -34,6 +37,7 @@ import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class MainService extends VideoService {
@@ -45,6 +49,10 @@ public class MainService extends VideoService {
 
     private static final String BITMAP_THREAD_NAME = String.format("%s%s",
             BitmapHandler.class.getSimpleName(), "BitmapThread");
+
+    private static final String DIRECTION_DETECTOR_THREAD_NAME = String.format("%s%s",
+            MainService.class.getSimpleName(), "DetectorThread");
+
     private static final String LOGTAG = MainService.class.getSimpleName();
     /*
      * When the VideoSession is restarted due to base camera configuration changes,
@@ -58,7 +66,8 @@ public class MainService extends VideoService {
      */
     private static final Object INFERENCE_HANDLER_LOCK =new Object();
     private static final Object BITMAP_HANDLER_LOCK = new Object();
-    private static final Object RENDER_HANDLER_LOCK =new Object();
+    private static final Object RENDER_HANDLER_LOCK = new Object();
+    private static final Object DIRECTION_DETECTOR_HANDLER_LOCK = new Object();
 
     private VideoManager mVideoManager;
     private WebServerConnection mWebServerConnection;
@@ -70,27 +79,33 @@ public class MainService extends VideoService {
 
     private Handler mRenderHandler;
     private HandlerThread mRenderHandlerThread;
+
+
+    private Handler mDirectorDetectorHandler;
+
+    private HandlerThread mDirectionDetectorThread;
     private VideoCapture mCapture;
 
-    private APIInterface apiInterface;
+    private List<DirectionDetection> directionDetectionList;
+    private int detectionCounter = 0;
 
-    /**
-     * Called when the service is created.
-     *
-     * @see #attachWebServer()
-     */
+
     @Override
     public void onCreate() {
         super.onCreate();
         attachWebServer();
+        directionDetectionList = new ArrayList<>();
         EventBus.getDefault().register(this);
+
      }
 
     @Override
     public void onDestroy() {
         detachWebServer();
         EventBus.getDefault().unregister(this);
+        stopBitmapHandlerThread();
         stopInferenceThread();
+        stopDirectionDetectorThread();
 
         super.onDestroy();
     }
@@ -108,29 +123,47 @@ public class MainService extends VideoService {
         startInferenceThread();
         configureDetector();
         startVideoSession();
+        startDirectionDetectorThread();
     }
 
-    @Subscribe(threadMode = ThreadMode.ASYNC)
+    @RequiresApi(api = android.os.Build.VERSION_CODES.ECLAIR)
+    @Subscribe(threadMode = ThreadMode.BACKGROUND)
     public void onEvent(final OnPostProccessingCompletedEvent onPostProccessingCompletedEvent) {
 
-        Log.e("---->","starting render process");
         Pair<Bitmap, List<Barcode>> detectionResult = onPostProccessingCompletedEvent.getResult();
-        Log.e("---->",""+detectionResult.second.get(0).getRawValue());
-        apiInterface = APIClient.getClient().create(APIInterface.class);
-        apiInterface.createUser(detectionResult.second.get(0).getRawValue());
+        Log.e("QR: ",""+detectionResult.second.get(0).getRawValue());
+        DirectionDetection directionDetection = new DirectionDetection();
+        directionDetection.translate = detectionResult.second.get(0).getRawValue();
+        directionDetection.w = detectionResult.first.getWidth();
+        directionDetection.h = detectionResult.first.getHeight();
+        directionDetection.position = new Pair(
+                detectionResult.second.get(0).getBoundingBox().top,
+                detectionResult.second.get(0).getBoundingBox().right);
 
+        directionDetectionList.add(directionDetection);
+        detectionCounter ++;
+        if(detectionCounter > 10){
+            Log.e("LAUNCH POSITION DETECTOR","---->");
+            synchronized (DIRECTION_DETECTOR_HANDLER_LOCK) {
+                if (!mDirectorDetectorHandler.hasMessages(DirectionDetectorHandler.Message.CALCULATE_DIRECTION.ordinal())) {
+                    mDirectorDetectorHandler.obtainMessage(DirectionDetectorHandler.Message.CALCULATE_DIRECTION.ordinal(),
+                            directionDetectionList).sendToTarget();
+                    detectionCounter = 0;
+                }
+            }
+
+
+        }
     }
     @Subscribe(threadMode = ThreadMode.ASYNC)
     public void onEvent(final OnDetectionProcessEvent onDetectionProcessEvent) {
 
-        Log.e("---->","starting render process");
         Bitmap bitmap = onDetectionProcessEvent.getResult();
         if (!mInferenceHandler.hasMessages(InferenceHandler.Message.RUN_INFERENCE.ordinal())) {
             mInferenceHandler.obtainMessage(InferenceHandler.Message.RUN_INFERENCE.ordinal(),bitmap).sendToTarget();
         }
 
     }
-
 
     private void configureDetector() {
         if (!mInferenceHandler.hasMessages(InferenceHandler.Message.CONFIGURE_DETECTOR.ordinal())) {
@@ -263,7 +296,6 @@ public class MainService extends VideoService {
         mRenderHandler = new RenderHandler(mRenderHandlerThread.getLooper());
 
     }
-
     private void stopRenderThread(){
         synchronized (RENDER_HANDLER_LOCK) {
             mRenderHandlerThread = null;
@@ -306,4 +338,20 @@ public class MainService extends VideoService {
     }
 
 
+    private void startDirectionDetectorThread(){
+        mDirectionDetectorThread = new HandlerThread(DIRECTION_DETECTOR_THREAD_NAME);
+        mDirectionDetectorThread.start();
+        mDirectorDetectorHandler = new DirectionDetectorHandler(mDirectionDetectorThread.getLooper());
+
+    }
+    private void stopDirectionDetectorThread(){
+
+        synchronized (DIRECTION_DETECTOR_HANDLER_LOCK) {
+            mDirectorDetectorHandler = null;
+            if (mDirectionDetectorThread != null) {
+                mDirectionDetectorThread.quitSafely();
+                mDirectionDetectorThread = null;
+            }
+        }
+    }
 }

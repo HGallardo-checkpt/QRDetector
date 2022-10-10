@@ -70,11 +70,8 @@ public class InferenceHandler extends Handler{
     }
     private void handleRunningInference(final Bitmap imageBmp) {
         qrReader.readCode(imageBmp, result -> {
-              Log.e("----->",""+result.second.size());
-
               if(result.second.size()>0){
                   new OnPostProccessingCompletedEvent(result).broadcastEvent();
-
               }
 
              /* if(result.second.size()>0){
