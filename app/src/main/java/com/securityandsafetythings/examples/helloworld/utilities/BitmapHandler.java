@@ -64,6 +64,7 @@ public class BitmapHandler extends Handler {
         switch (messageType) {
         case SET_BITMAP:
             Bitmap currentBitmap = (Bitmap)msg.obj;
+
             QRDetectionEndPoint.getInstance().setImage(currentBitmap);
             new OnDetectionProcessEvent(currentBitmap).broadcastEvent();
 

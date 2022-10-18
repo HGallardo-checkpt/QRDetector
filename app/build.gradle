@@ -106,6 +106,8 @@ dependencies {
      */
     implementation 'com.securityandsafetythings.jumpsuite:commonhelpers:1.1.0'
 
+    implementation 'com.securityandsafetythings.jumpsuite:framefeeder:3.1.1'
+
     implementation 'org.tensorflow:tensorflow-lite-task-vision:0.4.2'
 
     implementation 'com.quickbirdstudios:opencv:4.5.3.0'
@@ -114,9 +116,7 @@ dependencies {
 
     implementation 'com.google.mlkit:barcode-scanning:17.0.2'
 
-    implementation 'com.squareup.retrofit2:retrofit:2.8.1'
     implementation 'com.google.code.gson:gson:2.8.6'
-    implementation 'com.squareup.retrofit2:converter-gson:2.8.1'
 
 }
 
@@ -128,10 +128,15 @@ def websiteAssetPath = 'website'
  * The path prefix that REST API calls will be made to.
  */
 def restPathPrefix = 'api'
+
+def websocketPath = 'ws'
+
 // Add variables to the BuildConfig file that will be generated on building the app. 
 android.applicationVariants.all { variant ->
     variant.buildConfigField 'String', 'WEBSITE_ASSET_PATH', "\"$websiteAssetPath\""
     variant.buildConfigField 'String', 'REST_PATH_PREFIX', "\"$restPathPrefix\""
+    variant.buildConfigField 'String', 'WEBSOCKET_PATH', "\"$websocketPath\""
+
 }
 
 /**

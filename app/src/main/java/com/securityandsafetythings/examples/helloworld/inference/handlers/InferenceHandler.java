@@ -14,6 +14,7 @@ import com.google.mlkit.vision.common.InputImage;
 import com.securityandsafetythings.examples.helloworld.TfLiteDetectorApplication;
 import com.securityandsafetythings.examples.helloworld.events.OnInferenceCompletedEvent;
 import com.securityandsafetythings.examples.helloworld.events.OnPostProccessingCompletedEvent;
+import com.securityandsafetythings.examples.helloworld.events.OnPostProccessingNotDetectedEvent;
 import com.securityandsafetythings.examples.helloworld.inference.tflite.Detector;
 import com.securityandsafetythings.examples.helloworld.inference.tflite.TFLiteObjectDetectionAPIModel;
 import com.securityandsafetythings.examples.helloworld.opencv.Renderer;
@@ -71,7 +72,9 @@ public class InferenceHandler extends Handler{
     private void handleRunningInference(final Bitmap imageBmp) {
         qrReader.readCode(imageBmp, result -> {
               if(result.second.size()>0){
-                  new OnPostProccessingCompletedEvent(result).broadcastEvent();
+                   new OnPostProccessingCompletedEvent(result).broadcastEvent();
+              }else{
+                  new OnPostProccessingNotDetectedEvent(true).broadcastEvent();
               }
 
              /* if(result.second.size()>0){
@@ -101,6 +104,8 @@ public class InferenceHandler extends Handler{
 
             //new OnInferenceCompletedEvent(renderer.getImageWithBoxesAsBytes(imageBmp,tfResults)).broadcastEvent();
         }*/
+
+
     }
 
     /**

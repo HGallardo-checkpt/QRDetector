@@ -1,9 +1,12 @@
 package com.securityandsafetythings.examples.helloworld.direction;
 
+import android.graphics.Point;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.util.Pair;
+import com.securityandsafetythings.examples.helloworld.events.OnFinishDetectionEvent;
+import com.securityandsafetythings.examples.helloworld.events.OnPostProccessingNotDetectedEvent;
 import com.securityandsafetythings.examples.helloworld.pojos.DetectionResult;
 import com.securityandsafetythings.examples.helloworld.render.RenderDetectionOnUI;
 import com.securityandsafetythings.examples.helloworld.render.RenderHandler;
@@ -28,36 +31,36 @@ public class DirectionDetectorHandler  extends Handler {
 
         switch (messageType) {
             case CALCULATE_DIRECTION:
+                Log.e("LAUNCH POSITION DETECTOR","---->");
+
                 List<DirectionDetection> directionDetectionList = (List<DirectionDetection>) msg.obj;
-                 int size = directionDetectionList.size();
-                //int area = directionDetectionList.get(0).h * directionDetectionList.get(0).w;
-                if( directionDetectionList.get(0).position.first >
-                                directionDetectionList.get(size-1).position.first){
+                Log.e("----->",""+directionDetectionList.size());
 
-                    Log.e("DIRECTION DETECTED","    UP");
+                if(directionDetectionList.size()>0){
+                  int size = directionDetectionList.size()-1;
+                  Point center = directionDetectionList.get(0).center;
+                  Point firstLocation = directionDetectionList.get(0).position;
+                  Point secondLocation = directionDetectionList.get(size).position;
+                  Log.e("center",""+center.toString());
+                  Log.e("firstLocation",""+firstLocation.toString());
+                  Log.e("secondLocation",""+secondLocation.toString());
 
-                }else if (directionDetectionList.get(0).position.first <
-                        directionDetectionList.get(size-1).position.first){
-
-                    Log.e("DIRECTION DETECTED","    DOWN");
-
-                }
-
-
-
-
-        /*        while(directionDetectionList.listIterator().hasNext()){
-
-                    int px = directionDetectionList.listIterator().next().position.first;
-                    int py = directionDetectionList.listIterator().next().position.second;
+                  if(firstLocation.x < secondLocation.x ){
+                      new OnFinishDetectionEvent("DOWN TO UP").broadcastEvent();
+                  }
+                  else if(firstLocation.x > secondLocation.x ){
+                      new OnFinishDetectionEvent("UP to DOWN").broadcastEvent();
+                  }else{
+                      new OnFinishDetectionEvent("UNKNOW DIRECTION").broadcastEvent();
+                  }
 
 
-                }
-        */        Log.e("STARTING HANDLER DETECTOR DETECTOR","---->");
+              }
+
 
                 break;
             default:
-                Log.e(LOGTAG, "Unknown message received on BitmapHandlerThread");
+                Log.e(LOGTAG, "Unknown message received on DirectionDetectorHandlerThread");
         }
     }
 
